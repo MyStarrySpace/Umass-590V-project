@@ -5,7 +5,10 @@
 		<title>D3: Stack layout stacked bar chart</title>
 		<script src="https://d3js.org/d3.v4.min.js" charset="utf-8"></script>
 		<style type="text/css">
-			/* No style rules here yet */
+			.axisText path, .axisText line{
+				fill: none;
+				stroke: none;
+			}
 		</style>
 	</head>
 	<body>
@@ -16,16 +19,19 @@
 
 			//Original data
 			var dataset = [
-				{ apples: 5, oranges: 10, grapes: 22, factor: "a"},
-				{ apples: 4, oranges: 12, grapes: 28, factor: "b"},
-				{ apples: 2, oranges: 19, grapes: 32, factor: "c"},
-				{ apples: 7, oranges: 23, grapes: 35, factor: "d"},
-				{ apples: 23, oranges: 17, grapes: 43, factor: "e"}
+				{ apples: 5, oranges: 10, grapes: 22, factor: "aardvark"},
+				{ apples: 4, oranges: 12, grapes: 28, factor: "banana is a badoop blarp"},
+				{ apples: 2, oranges: 19, grapes: 32, factor: "car car car car car blarp blarp darp larp car car car car "},
+				{ apples: 7, oranges: 23, grapes: 35, factor: "dandelion"},
+				{ apples: 23, oranges: 17, grapes: 43, factor: "eagle"},
+				{ apples: 23, oranges: 17, grapes: 43, factor: "feather"}
 			];
 
-			//Width and height
+			// Set dimensions
 			var w = 600;
-			var h = 80 * dataset.length;
+			var h = 60 * dataset.length;
+			var h_offset = 50;
+			var wordLength = 80;
 
 			//Set up stack method
 			var stack = d3.stack()
@@ -59,21 +65,20 @@
 						return d.apples + d.oranges + d.grapes;
 					})
 				])
-				.range([0, h]);
+				.range([0, w]);
 			var yScale = d3.scaleBand()
 				.domain(d3.range(dataset.length))
 				.range([0, h])
-				.padding(0.2);
+				.paddingInner(0.2);
 				
 			// Set up colors
-			var colors = d3.scaleOrdinal(dataset).range(["#309603", "#FFF020", "#FB0017"]);
-			var colors2 = d3.scaleOrdinal(dataset).range(["#B1F68A", "#FFFC80", "#FD97AC"]);
+			var colors = d3.scaleOrdinal(dataset).range(["#B1F68A", "#FFFC80", "#FD97AC"]);
 		
 			//Create SVG element
 			var svg = d3.select("body")
 						.append("svg")
 						.attr("width", w)
-						.attr("height", h);
+						.attr("height", h + h_offset);
 
 			// Add a group for each row of data
 			var groups = svg.selectAll("g")
@@ -81,36 +86,40 @@
 				.enter()
 				.append("g")
 				.style("fill", function(d, i) {
+					console.log(d);
 					return colors(i);
 				})
-				.attr("transform", "translate(50,10)");
+				.attr("transform", "translate(" + wordLength + ", " + h_offset + ")");
 
 			// Create feature labels (y axis)
 			var scale = d3.scaleOrdinal()
                 .domain([d3.min(dataset), d3.max(dataset)])
-                .range(Array.from({length: dataset.length},(v,k)=>k*70 + 20));
-
-
+                .range(Array.from({length: dataset.length},(v,k)=> yScale(k) + 5));
 
             var y_axis = d3.axisLeft()
                   .scale(scale);
 
             scale.domain(dataset.map(function(d) { 
-            	console.log(d.factor);
             	return d.factor; }));
 
 			svg.append("g")
-				.attr("class", "x axis")
-            	.attr("transform", "translate(50,10)")
+				.attr("class", "axisText")
             	.call(y_axis)
-            	.selectAll("text");
+            	.selectAll("text")
+            	.call(wrap, wordLength)
+            	.attr("transform", "translate(" + (wordLength - 5) + ", " + h_offset + ")");
+
+            svg.append("text")
+		        .attr("x", (w / 2))             
+		        .attr("y", 0)
+		        .attr("text-anchor", "middle")  
+		        .style("font-size", "16px") 
+		        .style("text-decoration", "underline")  
+		        .text("Value vs Date Graph");
 			
-				// console.log(series)
 			// Add a rect for each data value
 			var rects = groups.selectAll("rect")
 				.data(function(d) { 
-					console.log(d)
-					console.log(d.index)
 					return d; })
 				.enter()
 				.append("rect")
@@ -125,9 +134,23 @@
 				})
 				.attr("height", yScale.bandwidth());
 
-			// Add text
-			var bar_text = groups.selectAll(".text")
-				.data(function(d) { 
+			// Stylize first bar differently
+			try{
+				groups._groups[0][0].getElementsByTagName("rect")[0].setAttribute("style", "fill: #309603;")
+				groups._groups[0][0].getElementsByTagName("rect")[0].setAttribute("class", "firstRowRect")
+				groups._groups[0][1].getElementsByTagName("rect")[0].setAttribute("style", "fill: #FFF020;")
+				groups._groups[0][1].getElementsByTagName("rect")[0].setAttribute("class", "firstRowRect")
+				groups._groups[0][2].getElementsByTagName("rect")[0].setAttribute("style", "fill: #FB0017;")
+				groups._groups[0][2].getElementsByTagName("rect")[0].setAttribute("class", "firstRowRect")
+			}
+			catch(err){
+				console.log("Error with stylizing first bar");
+			}
+
+			// Add bar text
+			var barText = groups.selectAll(".text")
+				.data(function(d) {
+				console.log(d); 
 					return d; })
 				.enter()
 				.append("text")
@@ -136,11 +159,59 @@
 				.attr("y", (function(d, i) { return yScale(i) + 15; }))
 				.attr("dy", ".75em")
 				.text(function(d) { return Math.round(d[1] - d[0]) + "%"; })
-				.style("fill", function(d, i) {
-					return "#000000";
-				});
-			console.log("SERIES");
-			console.log(series);
+				.style("fill", "#000000");
+
+			// Add top label text
+			var topRect = svg.selectAll(".firstRowRect");
+			for(rect of topRect._groups[0]){ 
+				svg.append("text").attr("class", "topLabel");
+			}
+			var topLabelText = svg.selectAll(".topLabel")
+				.data(series)
+				.text(function(d, i) { return(["Yes", "Maybe", "No"][i]); })
+				.attr("x", (function(d, i) { return(xScale(d[0][0]) + 5); }))
+				.attr("y", "-20")
+				.attr("dy", ".75em")
+				.attr("transform", "translate(" + (wordLength - 5) + ", " + h_offset + ")");
+
+			// Wrap feature text
+			function wrap(text, width) {
+			  text.each(function() {
+			    var text = d3.select(this),
+			        words = text.text().split(/\s+/).reverse(),
+			        word,
+			        line = [],
+			        lineNumber = 0,
+			        lineHeight = 1.1, // ems
+			        y = text.attr("y"),
+			        dy = parseFloat(text.attr("dy")),
+			        tspan = text.text(null).append("tspan").attr("x", 0).attr("y", y).attr("dy", dy + "em");
+			    while (word = words.pop()) {
+			      line.push(word);
+			      tspan.text(line.join(" "));
+			      if (tspan.node().getComputedTextLength() > width) {
+			        line.pop();
+			        tspan.text(line.join(" "));
+			        line = [word];
+			        tspan = text.append("tspan").attr("x", 0).attr("y", y).attr("dy", lineHeight + dy + "em").text(word);
+			      }
+			    }
+			  });
+			}
+
+			// Add lines through middle rectangles
+			var middle_rects = groups._groups[0][1].getElementsByTagName("rect");
+			for(rect of middle_rects){
+				console.log(rect);
+				groups.append("line")
+					.attr("x1", rect.x.baseVal.value + (rect.width.baseVal.value / 2))
+					.attr("x2", rect.x.baseVal.value + (rect.width.baseVal.value / 2))
+					.attr("y1", rect.y.baseVal.value)
+					.attr("y2", rect.y.baseVal.value + rect.height.baseVal.value)
+					.attr("class", "middleLine")
+					.attr("stroke-width", 2)
+					.attr("stroke", "#7F7F7F");
+			}
 						
 		</script>
 	</body>
